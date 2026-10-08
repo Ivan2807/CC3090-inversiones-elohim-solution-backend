@@ -25,4 +25,10 @@
     <ProjectReference Include="..\..\src\ElohimShop.Infrastructure\ElohimShop.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Pagos\Fixtures\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
