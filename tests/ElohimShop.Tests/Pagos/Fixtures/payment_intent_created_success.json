@@ -1,0 +1,6 @@
+{
+  "clientSecret": "pi_1234567890_secret_abcdef",
+  "reservacionId": "res_123",
+  "montoCentavos": 250000,
+  "moneda": "gtq"
+}

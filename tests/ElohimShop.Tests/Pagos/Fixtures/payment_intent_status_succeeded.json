@@ -1,0 +1,7 @@
+{
+  "paymentIntentId": "pi_1234567890",
+  "status": "succeeded",
+  "reservacionId": "res_123",
+  "montoCentavos": 250000,
+  "moneda": "gtq"
+}

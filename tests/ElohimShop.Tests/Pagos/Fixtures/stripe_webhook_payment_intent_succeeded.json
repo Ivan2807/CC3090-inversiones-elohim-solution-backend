@@ -1,0 +1,17 @@
+{
+  "id": "evt_123",
+  "object": "event",
+  "type": "payment_intent.succeeded",
+  "data": {
+    "object": {
+      "id": "pi_1234567890",
+      "object": "payment_intent",
+      "status": "succeeded",
+      "amount": 250000,
+      "currency": "gtq",
+      "metadata": {
+        "reservacion_id": "res_123"
+      }
+    }
+  }
+}
