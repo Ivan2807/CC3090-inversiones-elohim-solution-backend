@@ -6,103 +6,154 @@ Todos los controladores (excepto los de catálogo público) requieren el paso de
 
 ---
 
-## 1. Controladores por Módulo
+## 1. Inventario de Rutas por Módulo
+
+Las rutas siguientes reflejan los prefijos y atributos HTTP declarados actualmente en los controladores. Se muestran rutas versionadas (`/api/v1`) y rutas legacy (`/api`) porque ambas están presentes en el backend. El acceso y los contratos específicos se detallan en las secciones posteriores.
 
 ### Autenticación (`AuthController`)
-Prefijo: `/api/v1/auth` | Acceso: Público / Autenticado
+Prefijo: `/api/v1/auth`
 
-- `POST /login` - Iniciar sesión con credenciales
-- `POST /register` - Registrar nuevo usuario o staff
-- `POST /logout` - Cerrar sesión
-- `POST /forgot-password` - Solicitar recuperación de contraseña
-- `POST /change-password` - Cambiar contraseña existente
+- `POST /register` - Registrar usuario.
+- `POST /login` - Iniciar sesión.
+- `POST /logout` - Cerrar sesión.
+- `POST /forgot-password` - Solicitar recuperación de contraseña.
+- `POST /recover-with-code` - Recuperar acceso mediante código.
 
-### Administración de Usuarios (`AdminUsuariosController`)
-Prefijo: `/api/admin/usuarios` | Acceso: Admin / SuperAdmin
+### Administración de usuarios (`AdminUsuariosController`)
+Prefijo: `/api/admin/usuarios`
 
-- `GET /` - Listar usuarios de la tienda
-- `POST /` - Crear nuevo usuario o staff
-- `PUT /{id}` - Editar información de usuario
-- `POST /{id}/reset-password` - Generar códigos de recuperación
+- `GET /` - Listar usuarios.
+- `POST /` - Crear usuario.
+- `PUT /{id}/rol` - Cambiar el rol de un usuario.
+- `PUT /{id}/estado` - Cambiar el estado de un usuario.
+- `POST /{id}/reset-password` - Generar códigos de recuperación.
 
-### Productos y Catálogo (`ProductosV1Controller`)
-Prefijo: `/api/v1/productos` | Acceso: Público (lectura), Admin (escritura)
+### Usuarios de plataforma (`UsuariosV1Controller`)
+Prefijo: `/api/v1/usuarios`
 
-- `GET /` - Listar productos con paginación y filtros
-- `POST /` - Crear producto (Admin)
-- `PUT /{id}` - Editar producto (Admin)
-- `DELETE /{id}` - Eliminar producto soft-delete (Admin)
-
-### Sucursales (`SucursalesV1Controller`)
-Prefijo: `/api/v1/sucursales` | Acceso: Admin
-
-- `GET /` - Listar sucursales de la tienda
-- `POST /` - Crear sucursal
-- `PUT /{id}` - Editar información de sucursal
-- `DELETE /{id}` - Eliminar sucursal
-
-### Inventarios (`InventariosController`)
-Prefijo: `/api/v1/inventarios` | Acceso: Admin
-
-- `GET /sucursal/{sucursalId}` - Ver stock por sucursal
-- `PUT /` - Actualizar cantidad de stock
-- `GET /bajo-stock` - Productos con stock bajo
+- `GET /` - Listar usuarios.
+- `GET /{id}` - Obtener un usuario.
+- `POST /invitar` - Invitar usuario.
+- `PUT /{id}/rol` - Cambiar rol.
+- `PUT /{id}/estado` - Cambiar estado.
+- `DELETE /{id}` - Eliminar usuario.
 
 ### Carrito (`CarritoV1Controller`)
-Prefijo: `/api/v1/carrito` | Acceso: Cliente Autenticado
+Prefijo: `/api/v1/carrito`
 
-- `GET /` - Ver carrito del cliente
-- `POST /` - Agregar producto al carrito
-- `PUT /{itemId}` - Actualizar cantidad de item
-- `DELETE /{itemId}` - Remover producto del carrito
+- `GET /` - Obtener el carrito.
+- `POST /articulos` - Agregar un artículo.
+- `PUT /articulos/{id}` - Actualizar un artículo.
+- `DELETE /articulos/{id}` - Eliminar un artículo.
 
-### Reservaciones y Compras (`ReservacionesV1Controller`)
-Prefijo: `/api/v1/reservaciones` | Acceso: Admin / Cliente
+### Catálogo (`CatalogController`)
+Prefijo: `/api`
 
-- `GET /` - Listar todas las reservaciones (Admin)
-- `GET /mis-reservaciones` - Historial de compras del cliente
-- `POST /` - Crear nueva reservación (Cliente)
-- `PUT /{id}/despacho` - Cambiar estado de despacho (Admin)
+- `GET /marcas` - Listar marcas.
+- `GET /categorias` - Listar categorías.
+- `GET /productos` - Listar productos.
+- `GET /productos/buscar` - Buscar productos.
+- `GET /productos/{id}` - Obtener un producto.
+- `GET /seed/productos` - Ejecutar la ruta de inicialización de productos.
+- `POST /productos` - Crear producto.
+- `POST /productos/bulk` - Crear productos en lote.
+
+### Inventarios (`InventariosController`)
+Prefijo: `/api/v1/inventarios`
+
+- `GET /sucursal/{sucursalId}` - Obtener inventario de una sucursal.
+- `PUT /ajuste` - Ajustar inventario.
+
+### Archivos y media (`MediaController`)
+Prefijo: `/api/v1/media`
+
+- `GET /cloudinary-signature` - Obtener firma para Cloudinary.
+- `DELETE /` - Eliminar un recurso multimedia.
+
+### Métodos de pago (`MetodoPagoController`)
+Prefijo: `/api/metodoPago`
+
+- `GET /config-stripe` - Obtener configuración pública de Stripe.
+- `POST /contra-entrega` - Asegurar el método de pago contra entrega.
+- `GET /` - Listar métodos de pago.
+- `POST /` - Guardar método de pago.
+- `DELETE /{id}` - Eliminar método de pago.
 
 ### Pagos (`PagosController`)
-Prefijo: `/api/pagos` | Acceso: Cliente / Público (webhooks)
+Prefijo: `/api/pagos`
 
-- `POST /crear-intento` - Crear intent de pago Stripe (Cliente)
-- `POST /webhook` - Recibir eventos de Stripe (Público - asíncrono)
+- `POST /webhook` - Recibir eventos de Stripe.
+- `POST /create-intent` - Crear un intento de pago.
+- `GET /{paymentIntentId}/status` - Consultar el estado de un intento de pago.
 
-### Métodos de Pago (`MetodoPagoController`)
-Prefijo: `/api/metodoPago` | Acceso: Cliente Autenticado
+### Productos (`ProductosV1Controller`)
+Prefijo: `/api/v1/productos`
 
-- `GET /` - Listar tarjetas guardadas
-- `POST /` - Guardar nueva tarjeta (tokenizada en Stripe)
-- `DELETE /{id}` - Eliminar tarjeta guardada
+- `GET /` - Listar productos.
+- `GET /{id}` - Obtener un producto.
+- `POST /` - Crear producto.
+- `POST /bulk` - Crear productos en lote.
+- `PUT /{id}` - Actualizar producto.
+- `DELETE /{id}` - Eliminar producto.
 
-### Reportes y Dashboard (`ReportesV1Controller`)
-Prefijo: `/api/v1/reportes` | Acceso: Admin
+### Productos legacy (`ProductosController`)
+Prefijo: `/api/productos`
 
-- `GET /dashboard` - Métricas consolidadas de la tienda
-- `POST /personalizados` - Guardar plantilla de reporte SQL
-- `GET /personalizados/{id}/ejecutar` - Ejecutar reporte personalizado
-- `GET /ventas/exportar` - Descargar reporte en Excel
+- `PUT /{id}` - Actualizar producto.
+- `DELETE /{id}` - Eliminar producto.
 
-### Configuración Visual (`TiendasController`)
-Prefijo: `/api/v1/tiendas` | Acceso: Público (lectura), Admin (escritura)
+### Reportes administrativos (`ReportesController`)
+Prefijo: `/api/admin/reportes`
 
-- `GET /configuracion-visual` - Obtener configuración del constructor
-- `PUT /configuracion-visual` - Guardar cambios de diseño (Admin)
-- `GET /informacion` - Datos básicos de la tienda
+- `GET /productos` - Consultar reporte de productos.
+- `GET /empleados` - Consultar reporte de empleados.
+- `GET /stock-critico` - Consultar reporte de stock crítico.
+- `GET /demanda` - Consultar reporte de demanda.
+- `GET /metodos-pago` - Consultar reporte de métodos de pago.
 
-### Media y Archivos (`MediaController`)
-Prefijo: `/api/v1/media` | Acceso: Admin
+### Reportes de plataforma (`ReportesV1Controller`)
+Prefijo: `/api/v1/reportes`
 
-- `POST /upload` - Subir archivo a Cloudinary
-- `DELETE /{id}` - Eliminar archivo (Cloudinary)
+- `POST /ejecutar-raw` - Ejecutar una consulta de reporte.
+- `POST /guardar` - Guardar un reporte.
+- `GET /` - Listar reportes.
+- `GET /{id}/correr` - Ejecutar un reporte guardado.
 
-### Catálogo Público (`CatalogController`)
-Prefijo: `/api/` | Acceso: Público
+### Reservaciones legacy (`ReservacionController`)
+Prefijo: `/api/reservacion`
 
-- `GET /categorias` - Listar categorías disponibles
-- `GET /productos` - Consultar catálogo (sin autenticación)
+- `POST /` - Crear reservación.
+- `GET /` - Listar reservaciones.
+- `GET /{id}` - Obtener una reservación.
+
+### Reservaciones de plataforma (`ReservacionesV1Controller`)
+Prefijo: `/api/v1/reservaciones`
+
+- `POST /` - Crear reservación.
+- `GET /mis-compras` - Consultar compras del usuario.
+- `GET /control-staff` - Consultar reservaciones para staff.
+- `PATCH /{id}/estado` - Cambiar el estado de una reservación.
+
+### Sucursales (`SucursalesV1Controller`)
+Prefijo: `/api/v1/sucursales`
+
+- `GET /` - Listar sucursales.
+- `GET /{id}` - Obtener una sucursal.
+- `POST /` - Crear sucursal.
+- `PUT /{id}` - Actualizar sucursal.
+- `DELETE /{id}` - Eliminar sucursal.
+
+### Tiendas y personalización (`TiendasController`)
+Prefijo: `/api/v1/tiendas`
+
+- `GET /` - Listar tiendas.
+- `POST /` - Crear tienda.
+- `GET /valida-slug/{slug}` - Comprobar disponibilidad del slug.
+- `GET /{idOrSlug}` - Obtener tienda por identificador o slug.
+- `PUT /actualizar` - Actualizar información de la tienda.
+- `PUT /configuracion-visual` - Guardar configuración visual del constructor.
+- `POST /integraciones` - Guardar integraciones de la tienda.
+- `GET /integraciones` - Obtener integraciones de la tienda.
 
 ---
 
