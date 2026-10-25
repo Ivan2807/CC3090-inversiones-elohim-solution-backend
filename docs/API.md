@@ -294,13 +294,77 @@ Prefijo: `/api/pagos`
 
 ---
 
-### Gestión Visual del Constructor de Tiendas - `TiendasController`
+### Personalización de tienda e integraciones - `TiendasController`
 Prefijo: `/api/v1/tiendas`
 
-* **`GET /configuracion-visual`** (Público)
-  * **Respuesta (200 OK)**: JSON completo del constructor visual de la tienda asociada.
-* **`PUT /configuracion-visual`** (Staff con rol `administrador`)
-  * **Payload**: Objeto JSON serializado con el esquema de secciones (`sections`).
-  * **Respuesta (200 OK)**: Configuración guardada en la base de datos de manera persistente.
+El controlador obtiene el tenant desde `X-Tenant-ID`, el tenant resuelto por middleware o el claim `tienda_id`. Las acciones de actualización e integraciones devuelven `400 Bad Request` con `{ "error": "Se requiere el header X-Tenant-ID." }` cuando no se puede resolver un tenant.
 
-**Nota**: Para mayor informacion se sugiere consultar el Swagger del proyecto, este incluye el listado completo de todos los metodos http creados y el formato de las solicitudes y respuestas (en formato Json) de dichos metodos. 
+#### Obtener la configuración visual
+
+No existe una ruta `GET /configuracion-visual` en el backend actual. Para obtener la tienda y su configuración se usa `GET /{idOrSlug}`. Si no existe la tienda, responde `404 Not Found` con `{ "error": "Tienda no encontrada." }`.
+
+La respuesta es un `TiendaDto`; `configuracionVisual` se devuelve como una cadena que contiene el JSON almacenado:
+
+```json
+{
+  "id": "tienda-id",
+  "nombre": "Mi tienda",
+  "slug": "mi-tienda",
+  "estado": "activa",
+  "configuracionVisual": "{\"theme\":{},\"pages\":[]}",
+  "fechaCreacion": "2026-01-01T00:00:00Z",
+  "credencialesIntegracion": {
+    "tiendaId": "tienda-id",
+    "stripePublicKey": null,
+    "cloudinaryCloudName": null,
+    "cloudinaryApiKey": null
+  }
+}
+```
+
+#### Guardar la configuración visual
+
+* **`PUT /configuracion-visual`**
+  * **Payload**: El objeto de configuración se envía dentro de la propiedad `configuracionVisual`. El backend almacena el JSON recibido.
+    ```json
+    {
+      "configuracionVisual": {
+        "theme": {},
+        "pages": []
+      }
+    }
+    ```
+  * **Respuesta (200 OK)**: `TiendaDto` con la nueva configuración; `configuracionVisual` es una cadena con el JSON serializado.
+  * **Error (400 Bad Request)**: No se pudo resolver el tenant.
+
+#### Consultar integraciones
+
+* **`GET /integraciones`**
+  * **Respuesta (200 OK)**: `CredencialesIntegracionDtoFull`, con `tiendaId`, `stripeSecretKey`, `stripePublicKey`, `cloudinaryCloudName`, `cloudinaryApiKey`, `cloudinaryApiSecret`, `smtpEmail` y `smtpPassword`. Si todavía no hay credenciales guardadas, los campos de credenciales se devuelven como `null`.
+  * **Error (400 Bad Request)**: No se pudo resolver el tenant.
+
+#### Guardar integraciones
+
+* **`POST /integraciones`**
+  * **Payload**:
+    ```json
+    {
+      "stripeSecretKey": null,
+      "stripePublicKey": null,
+      "cloudinaryCloudName": null,
+      "cloudinaryApiKey": null,
+      "cloudinaryApiSecret": null,
+      "smtpEmail": null,
+      "smtpPassword": null
+    }
+    ```
+  * **Respuesta (200 OK)**: `TiendaDto`. Su propiedad `credencialesIntegracion` solo incluye `tiendaId`, `stripePublicKey`, `cloudinaryCloudName` y `cloudinaryApiKey`; no incluye los secretos.
+  * **Error (400 Bad Request)**: No se pudo resolver el tenant.
+
+**Nota de seguridad**: Aunque `GET /integraciones` devuelve secretos de Stripe, Cloudinary y SMTP, las acciones de este controlador solo verifican que exista contexto de tenant; no declaran una política o atributo explícito de autorización por rol. La definición Bearer de Swagger no aplica por sí sola autorización a una acción. Esta observación describe el código actual y requiere una revisión de seguridad independiente.
+
+#### Agente IA del constructor
+
+El backend actual no declara endpoints para un agente de IA dentro de la personalización de tienda. No se encontró un controlador, contrato de solicitud/respuesta ni servicio backend para generar o modificar la configuración visual con IA. Por tanto, no se documentan rutas hipotéticas; esta sección debe actualizarse cuando el endpoint exista y su contrato esté definido.
+
+**Swagger**: La interfaz está disponible en `/swagger` únicamente cuando la API se ejecuta en el entorno `Development`.
