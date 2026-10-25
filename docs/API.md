@@ -2,7 +2,7 @@
 
 La API del sistema está construida sobre ASP.NET Core utilizando arquitectura REST. Los endpoints están organizados bajo prefijos de ruta de versión (`/api/v1`) y de administración (`/api/admin`).
 
-Todos los controladores (excepto los de catálogo público) requieren el paso del identificador del tenant para resolver el contexto de la tienda (mediante cookies o las cabeceras `X-Tenant-ID` o `X-Tenant-Slug`).
+El contexto multi-tenant se resuelve por solicitud, no de forma uniforme para todos los controladores. El middleware acepta `X-Tenant-ID`, `X-Tenant-Slug` o un subdominio de tienda; algunas acciones también obtienen el tenant desde el claim `tienda_id`. Cada sección indica los requisitos que aplica su controlador. No todas las rutas exigen tenant.
 
 ---
 
@@ -176,18 +176,21 @@ Prefijo: `/api/v1/auth`
       "expiraEn": "ISO-8601-DateTime"
     }
     ```
-* **`POST /register`** (Público / Admin para Staff)
-  * **Payload**: `{ "correo": "string", "nombre": "string", "contrasena": "string", "tipoUsuario": "cliente|administrador", "rol": "cajero|administrador|null", "tipoCliente": "particular|mayorista|minorista" }`
-  * **Respuesta (200 OK)**: Mismo formato de `/login`.
+* **`POST /register`** (Público; el registro de administradores aplica controles adicionales)
+  * **Payload**: `{ "correo": "string", "nombre": "string", "contrasena": "string", "tipoUsuario": "string", "apellido": "string|null", "telefono": "string|null", "tipoCliente": "string|null", "rol": "string|null", "direccion": "string|null" }`
+  * **Respuesta (201 Created)**: `AuthResponseDto`, con identificador, correo, nombre, tipo de usuario, rol, tipo de cliente, token, expiración y `esSuperAdmin`.
 * **`POST /logout`** (Autenticado)
   * **Headers**: `Authorization: Bearer <token>`
-  * **Respuesta (200 OK)**: `{ "mensaje": "Sesión cerrada correctamente" }`
+  * **Respuesta (204 No Content)**: Sesión cerrada.
 * **`POST /forgot-password`** (Público)
+  * **Headers**: `X-Tenant-ID` obligatorio para esta acción.
   * **Payload**: `{ "correo": "string" }`
-  * **Respuesta (200 OK)**: Envia el código OTP SMTP configurado de forma autónoma.
-* **`POST /change-password`** (Autenticado)
-  * **Payload**: `{ "contrasenaActual": "string", "nuevaContrasena": "string" }`
-  * **Respuesta (200 OK)**: `{ "mensaje": "Contraseña cambiada con éxito" }`
+  * **Respuesta (200 OK)**: `{ "mensaje": "Se ha enviado un código de verificación a tu correo electrónico." }`.
+  * **Error (400 Bad Request)**: Falta `X-Tenant-ID`, no hay configuración SMTP, no se encuentra el cliente o no se pudo enviar el correo.
+* **`POST /recover-with-code`** (Público)
+  * **Payload**: `{ "correo": "string", "codigo": "string", "nuevaContrasena": "string" }`
+  * **Respuesta (200 OK)**: `{ "mensaje": "Contraseña actualizada correctamente. Inicia sesión con tu nueva contraseña." }`.
+  * **Error (400 Bad Request)**: Datos faltantes, contraseña con menos de ocho caracteres o código inválido, vencido o usado.
 
 ---
 
@@ -199,11 +202,14 @@ Prefijo: `/api/admin/usuarios` (Solo accesible por Staff con rol `administrador`
 * **`POST /`**
   * **Payload**: `{ "nombre": "string", "email": "string", "tipoUsuario": "staff|cliente", "rolStaff": "cajero|admin", "sucursalId": "string|null" }`
   * **Respuesta (201 Created)**: Retorna el objeto del usuario creado.
-* **`PUT /{id}`**
-  * **Payload**: `{ "nombre": "string", "rolStaff": "string", "sucursalId": "string|null", "estado": boolean }`
-  * **Respuesta (200 OK)**: Usuario actualizado.
+* **`PUT /{id}/rol`** (Superadmin)
+  * **Payload**: `CambiarRolUsuarioRequestDto`.
+  * **Respuesta (200 OK)**: Usuario actualizado; **403 Forbidden** si el solicitante no es superadmin.
+* **`PUT /{id}/estado`** (Administrador)
+  * **Payload**: `CambiarEstadoRequestDto`, con la propiedad `estado`.
+  * **Respuesta (200 OK)**: Usuario actualizado; **404 Not Found** si no existe.
 * **`POST /{id}/reset-password`**
-  * **Respuesta (200 OK)**: Genera 8 códigos de recuperación alternativos para restablecer la contraseña offline.
+  * **Respuesta (200 OK)**: Genera ocho códigos de recuperación de un solo uso, mostrados en texto plano únicamente en esta respuesta y almacenados hasheados.
     ```json
     {
       "usuarioId": "string",
@@ -216,81 +222,91 @@ Prefijo: `/api/admin/usuarios` (Solo accesible por Staff con rol `administrador`
 ---
 
 ### Productos y Categorías - `ProductosV1Controller`
-Prefijo: `/api/v1/productos` (Operaciones de escritura reservadas para Staff)
+Prefijo: `/api/v1/productos` (Las acciones verifican tenant; el controlador no valida un rol de Staff)
 
 * **`GET /`** (Público)
-  * **Parámetros**: `page` (int), `limit` (int), `categoriaId` (string), `buscar` (string)
-  * **Respuesta (200 OK)**: Lista paginada de productos filtrados por el tenant actual.
+  * **Requisito**: Tenant resoluble; si falta, responde **400 Bad Request**.
+  * **Respuesta (200 OK)**: Lista de productos del tenant.
+* **`GET /{id}`**
+  * **Respuesta (200 OK)**: Producto; **404 Not Found** si no existe.
 * **`POST /`** (Admin)
-  * **Payload**: `{ "nombre": "string", "descripcion": "string", "sku": "string", "precioMayoreo": decimal, "precioDetalle": decimal, "imagenUrl": "string", "categoriaId": "string" }`
+  * **Payload**: `{ "nombre": "string", "precioMayoreo": 0, "precioDetalle": 0, "categoriaId": "string|null", "sku": "string|null", "descripcion": "string|null", "imagenUrl": "string|null", "publicado": true, "stockMinimo": 0, "stockSucursales": [] }`.
   * **Respuesta (201 Created)**: Producto creado.
+* **`POST /bulk`**
+  * **Payload**: Arreglo de productos con nombre, precios, categoría, SKU, descripción, imagen, publicación, stock mínimo y stock actual.
+  * **Respuesta (201 Created)**: Productos creados.
 * **`PUT /{id}`** (Admin)
-  * **Payload**: Estructura de actualización del producto.
-  * **Respuesta (200 OK)**: Producto modificado.
+  * **Payload**: Mismos campos editables de `POST /`, incluyendo `stockSucursales`.
+  * **Respuesta (200 OK)**: Producto actualizado; **404 Not Found** si no existe.
 * **`DELETE /{id}`** (Admin)
-  * **Respuesta (200 OK)**: Soft-delete (marca columna `eliminado = true`).
+  * **Respuesta (204 No Content)**: Producto eliminado; **404 Not Found** si no existe.
 
 ---
 
 ### Reservaciones y Compras - `ReservacionesV1Controller`
 Prefijo: `/api/v1/reservaciones`
 
-* **`GET /`** (Staff)
-  * **Respuesta (200 OK)**: Lista completa de reservaciones de la tienda.
-* **`GET /mis-reservaciones`** (Cliente)
-  * **Respuesta (200 OK)**: Lista de reservaciones asociadas al cliente logueado.
-* **`POST /`** (Cliente)
-  * **Payload**:
-    ```json
-    {
-      "sucursalId": "string",
-      "detalles": [
-        { "productoId": "string", "cantidad": 5 }
-      ]
-    }
-    ```
-  * **Respuesta (201 Created)**: Reservación creada con estado de pago `"pendiente"`.
-* **`PUT /{id}/despacho`** (Staff)
-  * **Payload**: `{ "estadoDespacho": "procesando|completado|cancelado" }`
-  * **Respuesta (200 OK)**: Estado actualizado.
+* **`POST /`** (Cliente autenticado y tenant resoluble)
+  * **Payload**: `{ "sucursalId": "string", "stripeIntentId": "string|null" }`.
+  * **Respuesta (201 Created)**: Reservación creada.
+  * **Error (401 Unauthorized)**: Falta identidad de usuario o tenant.
+* **`GET /mis-compras`** (Cliente autenticado y tenant resoluble)
+  * **Respuesta (200 OK)**: Compras asociadas al usuario autenticado.
+  * **Error (401 Unauthorized)**: Falta identidad de usuario o tenant.
+* **`GET /control-staff`** (Staff con tenant)
+  * **Respuesta (200 OK)**: Reservaciones de la tienda; **403 Forbidden** si falta tenant o el usuario no es staff.
+* **`PATCH /{id}/estado`** (Staff con tenant)
+  * **Payload**: `CambiarEstadoReservacionRequest`, con `estadoPago` y/o `estadoDespacho` opcionales.
+  * **Respuesta (200 OK)**: Reservación actualizada; **404 Not Found** si no existe.
 
 ---
 
 ### Inventarios - `InventariosController`
-Prefijo: `/api/v1/inventarios` (Solo accesible por Staff)
+Prefijo: `/api/v1/inventarios` (Las acciones verifican que se resuelva un tenant)
 
 * **`GET /sucursal/{sucursalId}`**
   * **Respuesta (200 OK)**: Existencias de todos los productos en la sucursal indicada.
-* **`PUT /`**
+* **`PUT /ajuste`**
   * **Payload**: `{ "sucursalId": "string", "productoId": "string", "stock": 50 }`
   * **Respuesta (200 OK)**: Existencia de stock actualizada en el inventario físico de la sucursal.
+  * **Error (400 Bad Request)**: No se pudo resolver el tenant.
 
 ---
 
 ### Dashboard y Reportes - `ReportesV1Controller`
-Prefijo: `/api/v1/reportes` (Solo accesible por Staff con rol `administrador` o superior)
+Prefijo: `/api/v1/reportes` (Las acciones requieren tenant y usuario reconocido como Staff)
 
-* **`GET /dashboard`**
-  * **Respuesta (200 OK)**: Métricas consolidadas (Ventas totales, reservaciones pendientes, stock bajo por producto, facturación del mes).
-* **`POST /personalizados`**
-  * **Payload**: `{ "nombre": "string", "querySql": "SELECT ... FROM ... WHERE tienda_id = @TiendaId" }`
-  * **Respuesta (201 Created)**: Guarda una plantilla de consulta SQL personalizada para el tenant.
-* **`GET /personalizados/{id}/ejecutar`**
-  * **Respuesta (200 OK)**: Ejecuta de manera segura la consulta SQL personalizada del tenant y retorna la rejilla de datos en formato JSON.
-* **`GET /ventas/exportar`**
-  * **Respuesta (200 OK)**: Genera y descarga un archivo `.xlsx` (Excel) con el desglose de ventas del mes en curso utilizando `ClosedXML` u otra librería de hojas de cálculo.
+* **`POST /ejecutar-raw`** (Staff con tenant)
+  * **Payload**: `{ "querySql": "SELECT ..." }`.
+  * **Respuesta (200 OK)**: Resultado con filas (`rows`).
+  * **Errores**: **400 Bad Request** para consultas inválidas; **403 Forbidden** si falta tenant o el solicitante no es staff; **500 Internal Server Error** ante otro error de ejecución.
+* **`POST /guardar`** (Staff con tenant)
+  * **Payload**: `{ "nombre": "string", "descripcion": "string|null", "querySql": "SELECT ..." }`.
+  * **Respuesta (201 Created)**: Reporte guardado.
+* **`GET /`** (Staff con tenant)
+  * **Respuesta (200 OK)**: Reportes guardados para el tenant.
+* **`GET /{id}/correr`** (Staff con tenant)
+  * **Respuesta (200 OK)**: Resultado de ejecutar el reporte; **403 Forbidden** si falta tenant o el solicitante no es staff.
+
+Los reportes analíticos del controlador legacy están bajo `/api/admin/reportes`: `GET /productos`, `GET /empleados`, `GET /stock-critico`, `GET /demanda` y `GET /metodos-pago`. Estos endpoints requieren autenticación y validan que el usuario pertenezca al panel administrativo.
 
 ---
 
 ### Pasarela de Pagos (Stripe) - `PagosController`
 Prefijo: `/api/pagos`
 
-* **`POST /crear-intento`** (Cliente Autenticado)
-  * **Payload**: `{ "reservacionId": "string" }`
-  * **Respuesta (200 OK)**: Retorna el `clientSecret` e `intentId` de Stripe para inicializar el SDK del lado del cliente.
-* **`POST /webhook`** (Público)
-  * **Payload**: Eventos asíncronos provenientes de los servidores de Stripe.
-  * **Acción**: Intercepta eventos de tipo `payment_intent.succeeded`. Busca la reservación asociada mediante `stripe_intent_id`, cambia su estado a `"pagado"` en la base de datos, lo que dispara automáticamente la deducción de inventario (`SaveChangesAsync`) en la sucursal.
+* **`POST /create-intent`** (Cliente autenticado)
+  * **Payload**: `{ "reservacionId": "string", "metodoPagoId": "string|null" }`.
+  * **Respuesta (200 OK)**: `{ "clientSecret": "string", "reservacionId": "string", "montoCentavos": 0, "moneda": "string" }`.
+  * **Errores**: **400 Bad Request** para una operación inválida; **401 Unauthorized** sin identidad válida; **403 Forbidden** si el token no pertenece a un cliente.
+* **`GET /{paymentIntentId}/status`** (Autenticado)
+  * **Respuesta (200 OK)**: `{ "paymentIntentId": "string", "status": "string", "reservacionId": "string", "montoCentavos": 0, "moneda": "string" }`.
+  * **Errores**: **401 Unauthorized** para token inválido; **403 Forbidden** si no está autorizado a consultar ese pago; **404 Not Found** si no existe.
+* **`POST /webhook`** (Público, sin JWT)
+  * **Headers**: `Stripe-Signature` obligatorio.
+  * **Payload**: Cuerpo JSON crudo enviado por Stripe.
+  * **Respuesta (200 OK)**: `{ "recibido": true }` al procesar el evento.
+  * **Errores**: **400 Bad Request** si falta la firma o no es válida; **500 Internal Server Error** ante un error interno al procesar el evento.
 
 ---
 
