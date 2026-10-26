@@ -1,4 +1,5 @@
 using ElohimShop.Application.Platform;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ElohimShop.API.Controllers;
@@ -50,6 +51,7 @@ public class ProductosV1Controller : V1ControllerBase
         return StatusCode(StatusCodes.Status201Created, producto);
     }
 
+    [Authorize]
     [HttpPost("bulk")]
     public async Task<IActionResult> CrearBulk([FromBody] IReadOnlyCollection<CrearProductoBulkInput> requests, CancellationToken cancellationToken)
     {
