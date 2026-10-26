@@ -60,8 +60,19 @@ public class ProductosV1Controller : V1ControllerBase
             return BadRequest(new { error = "Se requiere el header X-Tenant-ID." });
         }
 
-        var productos = await _platformService.CrearProductosBulkAsync(requests, cancellationToken);
-        return StatusCode(StatusCodes.Status201Created, productos);
+        try
+        {
+            var productos = await _platformService.CrearProductosBulkAsync(requests, cancellationToken);
+            return StatusCode(StatusCodes.Status201Created, productos);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPut("{id}")]

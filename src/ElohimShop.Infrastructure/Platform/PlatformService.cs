@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -357,6 +358,26 @@ public class PlatformService : IPlatformService
     public async Task<IReadOnlyList<ProductoDto>> CrearProductosBulkAsync(IReadOnlyCollection<CrearProductoBulkInput> requests, CancellationToken cancellationToken)
     {
         var tiendaId = RequireTenantId();
+        await RequireTenantAdministratorAsync(tiendaId, cancellationToken);
+
+        var categoriaIds = requests
+            .Select(request => request.CategoriaId)
+            .Where(categoriaId => !string.IsNullOrWhiteSpace(categoriaId))
+            .Distinct()
+            .ToArray();
+
+        if (categoriaIds.Length > 0)
+        {
+            var categoriasValidas = await _dbContext.Categorias
+                .IgnoreQueryFilters()
+                .CountAsync(categoria => categoria.TiendaId == tiendaId && categoriaIds.Contains(categoria.Id), cancellationToken);
+
+            if (categoriasValidas != categoriaIds.Length)
+            {
+                throw new ArgumentException("Una o más categorías no pertenecen a la tienda actual.", nameof(requests));
+            }
+        }
+
         var creadosIds = new List<string>();
 
         // Obtener la primera sucursal para asociar el stock actual
@@ -1247,6 +1268,33 @@ public class PlatformService : IPlatformService
         }
 
         return tenantId;
+    }
+
+    private async Task RequireTenantAdministratorAsync(string tenantId, CancellationToken cancellationToken)
+    {
+        var user = _httpContextAccessor.HttpContext?.User;
+        var userId = user?.FindFirstValue(JwtRegisteredClaimNames.Sub)
+            ?? user?.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            throw new UnauthorizedAccessException("Se requiere un usuario autenticado para crear productos.");
+        }
+
+        var isTenantAdministrator = await _dbContext.Users
+            .IgnoreQueryFilters()
+            .AnyAsync(
+                candidate => candidate.Id == userId &&
+                    candidate.TiendaId == tenantId &&
+                    candidate.TipoUsuario == "staff" &&
+                    candidate.RolStaff == "administrador" &&
+                    candidate.Estado,
+                cancellationToken);
+
+        if (!isTenantAdministrator)
+        {
+            throw new UnauthorizedAccessException("El usuario no es administrador de la tienda actual.");
+        }
     }
 
     private static decimal ObtenerPrecio(CarritoElemento item)
